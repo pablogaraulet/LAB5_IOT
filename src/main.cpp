@@ -11,7 +11,6 @@
 #define CTRL1_XL     0x10
 #define OUTX_L_A     0x28
 
-// Write a value to a register on the LSM6DSO
 void writeRegister(uint8_t reg, uint8_t value) {
   Wire.beginTransmission(LSM6DSO_ADDR);
   Wire.write(reg);
@@ -19,7 +18,6 @@ void writeRegister(uint8_t reg, uint8_t value) {
   Wire.endTransmission();
 }
 
-// Read 16-bit (2-byte) value from the sensor
 int16_t read16bitRegister(uint8_t regL) {
   const int maxRetries = 3;
   for (int retry = 0; retry < maxRetries; retry++) {
@@ -29,13 +27,11 @@ int16_t read16bitRegister(uint8_t regL) {
       delay(40);
       continue;
     }
-
     delay(40);
     if (Wire.requestFrom((uint16_t)LSM6DSO_ADDR, (uint8_t)2) < 2) {
       delay(40);
       continue;
     }
-
     uint8_t low = Wire.read();
     uint8_t high = Wire.read();
     return (int16_t)((high << 8) | low);
@@ -93,38 +89,45 @@ void setupIMU() {
 
 // Detect steps and jumps based on magnitude and Z-axis
 void detectActivity() {
+  unsigned long t_start = millis();  // Start timestamp
+
   int16_t ax_raw = read16bitRegister(OUTX_L_A);
   int16_t ay_raw = read16bitRegister(OUTX_L_A + 2);
   int16_t az_raw = read16bitRegister(OUTX_L_A + 4);
 
-  float scale = 0.000061; // For ±2g scale
+  float scale = 0.000061; 
   float ax = ax_raw * scale;
   float ay = ay_raw * scale;
   float az = az_raw * scale;
 
   float mag = sqrt(ax * ax + ay * ay + az * az);
 
-  // Prioritize jump detection over step detection
   if (!overThreshold) {
     if (mag > 1.35 && az > 1.2) {
       jumpCount++;
       overThreshold = true;
+      unsigned long detectionTime = millis() - t_start;
       Serial.println(">>> JUMP DETECTED");
+      Serial.print("BLE JUMP Detection Time: ");
+      Serial.print(detectionTime);
+      Serial.println(" ms");
       return;
     } else if (mag > 1.0 && az <= 1.2) {
       stepCount++;
       overThreshold = true;
+      unsigned long detectionTime = millis() - t_start;
       Serial.println(">>> STEP DETECTED");
+      Serial.print("BLE STEP Detection Time: ");
+      Serial.print(detectionTime);
+      Serial.println(" ms");
       return;
     }
   }
 
-  // Reset state when below threshold
   if (mag < RESET_THRESH_G) {
     overThreshold = false;
   }
 
-  // Debug output to serial
   Serial.print("Mag: ");
   Serial.print(mag, 2);
   Serial.print(" | Z: ");
@@ -135,7 +138,6 @@ void detectActivity() {
   Serial.println(jumpCount);
 }
 
-// Arduino setup function
 void setup() {
   Serial.begin(115200);
   Serial.println("\n--- BLE Activity Monitor ---");
@@ -143,7 +145,6 @@ void setup() {
   setupBLE();
 }
 
-// Arduino loop function
 void loop() {
   static unsigned long lastStep = 0;
   static unsigned long lastJump = 0;
@@ -160,5 +161,5 @@ void loop() {
     pCharacteristic->notify();
   }
 
-  delay(500);
+  delay(250);
 }
